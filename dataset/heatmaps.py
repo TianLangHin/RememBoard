@@ -42,6 +42,8 @@ def heatmap(filename: str) -> Breakdown:
     }
     for game in games:
         board = game.board()
+        if len(game.errors) > 0:
+            print(game.errors)
         for move in game.mainline_moves():
             board.push(move)
             increment(heatmap_data, board)
