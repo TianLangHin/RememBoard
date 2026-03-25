@@ -115,6 +115,10 @@ def create_diagrams(game_name: str, game_data: list[Game]):
     plt.title(f'Histogram of the number of positions per game in {game_name}')
     plt.savefig(f'explore-{game_str}-histogram.png')
 
+    with open(f'audit-{game_str}-position_nums.txt', 'wt') as f:
+        for game_num, game_length in enumerate(length_data):
+            f.write(f'Game {game_num + 1} should have {1 + game_length} images.\n')
+
 def main():
     pgn_filename = sys.argv[1]
     if pgn_filename == 'aggregate':
