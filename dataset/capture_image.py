@@ -13,12 +13,12 @@ if not os.path.exists(os.path.join(os.getcwd(), category)):
 
 ply_number = 1
 while True:
+    key = input(f'Move {ply_number} image: ')
     cap = cv2.VideoCapture(f'http://{ip_webcam}/video')
     ret, frame = cap.read()
     if not ret:
         print('End')
         break
-    key = input(f'Move {ply_number} image: ')
     if key == 'quit':
         break
     cv2.imwrite(os.path.join(os.getcwd(), category, f'{ply_number:0>4}.png'), frame)
