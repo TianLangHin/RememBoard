@@ -1,5 +1,6 @@
 # Other custom ignores.
 explore-*.png
+audit-*.png
 
 # Python gitignore template.
 # Byte-compiled / optimized / DLL files
