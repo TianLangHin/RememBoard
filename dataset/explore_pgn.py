@@ -69,11 +69,11 @@ def create_diagrams(game_name: str, game_data: list[Game]):
 
     hmp_data = heatmap(game_data)
 
-    fig, axes = plt.subplots(2, 6, figsize=(20, 5))
+    fig, axes = plt.subplots(4, 3, figsize=(10, 10))
     fig.suptitle(f'Heatmap for {game_name}')
     fig.subplots_adjust(wspace=0.5)
     for i, (colour, piece) in enumerate(product(COLOURS, PIECES)):
-        ax = axes[*divmod(i, 6)]
+        ax = axes[*divmod(i, 3)]
         ax.set_title(f'{colour_names[i // 6]} {piece_names[i % 6]}')
         ax.set_box_aspect(1)
         hmp = sns.heatmap(hmp_data[piece, colour], ax=ax, cmap=cmap, cbar=True)
