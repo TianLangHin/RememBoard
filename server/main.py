@@ -1,10 +1,3 @@
-import mimetypes
-mimetypes.add_type('application/javascript', '.js')
-mimetypes.add_type('text/css', 'css')
-
-from flask import Flask, jsonify, send_from_directory
-from flask_cors import CORS
-
 import asyncio
 import base64
 import chess
