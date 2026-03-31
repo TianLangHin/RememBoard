@@ -142,6 +142,7 @@ def model_analysis_unseen(image_dir: str, output_dir: str, pgn_file: str):
         for err in errors:
             f.write(f'{err}\n')
 
+# This program is only to be executed as a helper script, after `cd`ing into the `server/` directory.
 if __name__ == '__main__':
     image_dir = sys.argv[1]
     output_dir = sys.argv[2]

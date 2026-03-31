@@ -28,10 +28,12 @@ def target_corners_as_ndarray(*, width: int, pad: int) -> np.ndarray:
     ])
 
 def corners_from_point_list(centres: List[Tuple[float, float]]) -> Corners:
-    assert len(centres) == 4
+    assert len(centres) >= 4
     # The first item is x (increasing to the right), the second item is y (increasing downwards).
     from_top_left = lambda point: point[0] + point[1]
     from_bottom_left = lambda point: point[0] - point[1]
+    # This only considers the maximal four corners of the possible chessboard square,
+    # thus always returning 4 corners.
     return Corners(
         tl=min(centres, key=from_top_left),
         tr=max(centres, key=from_bottom_left),
@@ -78,7 +80,7 @@ def yolo_inference_to_piece_list(result: Results, *, warped: bool = True, orient
         else:
             piece_boxes.append((class_name, conf, Box(x=x.item(), y=y.item(), w=w.item(), h=h.item())))
 
-    if len(corner_centres) != 4:
+    if len(corner_centres) < 4:
         return None
 
     # After this step, corners are arranged in the order of: [top_left, top_right, bottom_left, bottom_right]
