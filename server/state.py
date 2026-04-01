@@ -1,58 +1,46 @@
-from enum import Enum
-from typing import List, Optional, Tuple
 import chess
 
-from analysis import board_to_piece_list
-from conversion import TopLeftSquare, yolo_inference_to_piece_list
+from conversion import TopLeftSquare
 
-type PieceList = List[Optional[chess.Piece]]
-
-PredictionStatus = Enum('PredictionStatus', ['ValidMove', 'InvalidMove', 'AmbiguousMove', 'Obstructed'])
-
-def check_pieces_match(*, target: PieceList, prediction: PieceList, match_exact: bool) -> bool:
-    target_set = {square for square in range(64) if target[square] is not None}
-    prediction_set = {square for square in range(64) if prediction[square] is not None}
-    if match_exact:
-        return target_set == prediction_set
-    else:
-        return prediction_set.issubset(target_set)
-
-def get_possible_moves(*, known_board: chess.Board, piece_list: PieceList, match_exact: bool) -> List[chess.Move]:
-    true_pieces = board_to_piece_list(known_board)
-    possible_moves = []
-    # First, we see if the piece patterns match against the existing board (i.e., no move made).
-    if check_pieces_match(target=true_pieces, prediction=piece_list, match_exact=match_exact):
-        possible_moves.append(chess.Move.null())
-    # Next, we look for every possible legal move.
-    for move in known_board.legal_moves:
-        board.push(move)
-        # We check to see if the piece patterns match for each possible next legal position.
-        moved_pieces = board_to_piece_list(board)
-        if check_pieces_match(target=moved_pieces, prediction=piece_list, match_exact=match_exact):
-            possible_moves.append(move)
-        board.pop()
-    return possible_moves
-
-def get_predicted_transition(*, known_board: chess.Board, piece_list: PieceList, match_exact: bool) -> Tuple[PredictionStatus, List[chess.Move]]:
-    possible_moves = get_possible_moves(known_board=known_board, piece_list=piece_list, match_exact=match_exact)
-    if match_exact:
-        if len(possible_moves) == 0:
-            possible_obstructed_moves = get_possible_moves(
-                known_board=known_board,
-                piece_list=piece_list,
-                match_exact=False)
-            if len(possible_obstructed_moves) == 0:
-                return PredictionStatus.InvalidMove, []
-            else:
-                return PredictionStatus.Obstructed, []
-        elif len(possible_moves) == 1:
-            return PredictionStatus.ValidMove, possible_moves
-        else:
-            return PredictionStatus.AmbiguousMove, possible_moves
-    else:
-        if len(possible_moves) == 0:
-            return PredictionStatus.InvalidMove, []
-        elif len(possible_moves) == 1:
-            return PredictionStatus.ValidMove, possible_moves
-        else:
-            return PredictionStatus.AmbiguousMove, possible_moves
+class LiveGameState:
+    def __init__(self, *, p1: str, p2: str, orientation: TopLeftSquare = TopLeftSquare.H8):
+        self.p1 = p1
+        self.p2 = p2
+        self.paused = False
+        self.concluded = False
+        self.board = chess.Board()
+        self.orientation = orientation
+    def pause(self):
+        self.paused = True
+    def unpause(self):
+        self.paused = False
+    def push_move(self, move: chess.Move):
+        # If the game has already concluded, then pushing the move is unsuccessful.
+        if self.concluded or self.board.result() != '*':
+            self.concluded = True
+            return
+        # If this move is illegal, it is also unsuccessful.
+        if move not in self.board.legal_moves:
+            return
+        # Push the move.
+        self.board.push(move)
+        # Update whether this move concludes the game.
+        if self.board.result() != '*':
+            self.concluded = True
+    def undo_move(self):
+        self.concluded = False
+        # If the list is empty, that does not matter.
+        try:
+            self.board.pop()
+        except IndexError:
+            pass
+    def rename_player1(self, new_name: str):
+        self.p1 = new_name
+    def rename_player2(self, new_name: str):
+        self.p2 = new_name
+    def serialise(self) -> str:
+        p = ['0', '1'][self.paused]
+        c = ['0', '1'][self.concluded]
+        f = self.board.fen()
+        o = self.orientation.name
+        return f'p1[{self.p1}]p2[{self.p2}]paused[{p}]concluded[{c}]fen[{f}]orientation[{o}]'
