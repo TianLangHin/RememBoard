@@ -9,6 +9,9 @@ import websockets
 
 from conversion import TopLeftSquare, yolo_inference_to_piece_list
 from inference import PredictionStatus, get_predicted_transition
+from parse import parse_add_game, parse_remove_game, \
+    parse_push_move, parse_undo_move, parse_rename_players, \
+    parse_pause_game, parse_unpause_game, parse_reorient_game
 from state import LiveGameState
 from video import BufferlessVideo
 
@@ -22,8 +25,8 @@ class ServerState:
     def add_client(self, ws_connection):
         self.connected_clients.add(ws_connection)
     def remove_client(self, ws_connection):
-        self.connected_clients.remove(ws_connection)
-        ws_connection.close()
+        if ws_connection in self.connected_clients:
+            self.connected_clients.remove(ws_connection)
     # Returns True if successful.
     def add_controller(self, ws_connection) -> bool:
         if self.connected_controller is None:
@@ -32,7 +35,6 @@ class ServerState:
         return False
     def remove_controller(self, ws_connection):
         if self.connected_controller == ws_connection:
-            self.connected_controller.close()
             self.connected_controller = None
     def add_new_game(self, game_state: LiveGameState, stream: BufferlessVideo):
         self.games.append((game_state, stream))
@@ -52,33 +54,19 @@ def read_and_resize_frame(cap: BufferlessVideo) -> Optional[np.ndarray]:
             return cv2.resize(frame, (640, 360))
     return None
 
-# Example: 'addgame P1 P2 h8 http://192.168.1.47:8080/video'
-def parse_add_game(cmd: list[str]) -> Optional[Tuple[LiveGameState, str]]:
-    if len(cmd) < 5:
-        return None
-    if cmd[0] != 'addgame':
-        return None
-    p1, p2 = cmd[1], cmd[2]
-    enum_lookup = {
-        'a1': TopLeftSquare.A1,
-        'a8': TopLeftSquare.A8,
-        'h1': TopLeftSquare.H1,
-        'h8': TopLeftSquare.H8,
+def create_transmission_payload(
+        img: str,
+        status: PredictionStatus,
+        diagnostics: str,
+        game_state: LiveGameState) -> str:
+    status_map = {
+        PredictionStatus.ValidMove:     'valid',
+        PredictionStatus.InvalidMove:   'invalid',
+        PredictionStatus.AmbiguousMove: 'ambiguous',
+        PredictionStatus.Obstructed:    'obstructed',
     }
-    orientation = enum_lookup.get(cmd[3], None)
-    if orientation is None:
-        return None
-    stream = cmd[4]
-    return LiveGameState(p1=p1, p2=p2, orientation=orientation), stream
-
-def parse_remove_game(cmd: list[str]) -> Optional[int]:
-    if len(cmd) < 2:
-        return None
-    if cmd[0] != 'removegame':
-        return None
-    if not cmd[1].isnumeric():
-        return None
-    return int(cmd[1])
+    s = status_map[status]
+    return f'status<{s}<{diagnostics}>>game<{game_state.serialise()}>img<{img}>'
 
 async def handle_message(message: str, ws_connection):
     async with lock:
@@ -86,65 +74,111 @@ async def handle_message(message: str, ws_connection):
         if ws_connection == SERVER_STATE.connected_controller:
             parts = message.split()
             if message == 'inference':
-                statuses_to_controller = []
-                images_to_client = []
-                fens = []
+                # This will contain a list of strings referring to each game in SERVER_STATE.
+                payload_list = []
+
                 # Computer vision inference is triggered by the controller
                 # sending the "inference" message to the server.
                 for game_state, video_stream in SERVER_STATE.games:
+                    # The payload contains three components:
+                    # an image (base64), prediction status (with associated chess moves), and game status.
+
                     frame = read_and_resize_frame(video_stream)
-                    result = MODEL.predict(frame, imgsz=640, conf=0.25, verbose=False)[0]
-                    prediction = yolo_inference_to_piece_list(
-                        result,
-                        warped=True,
-                        orientation=game_state.orientation)
-                    status_string = {
-                        PredictionStatus.ValidMove: 'v',
-                        PredictionStatus.InvalidMove: 'i',
-                        PredictionStatus.AmbiguousMove: 'a',
-                        PredictionStatus.Obstructed: 'o',
-                    }
-                    if prediction is not None:
-                        # `possible_moves` will be given to the controller,
-                        # but currently that is not implemented.
-                        predict_status, possible_moves = get_predicted_transition(
-                            known_board=game_state.board,
-                            piece_list=prediction,
-                            match_exact=True)
-                        if predict_status == PredictionStatus.ValidMove:
-                            if possible_moves[0] != chess.Move.null():
+                    if not game_state.paused:
+                        # First, model inference happens if the game is not paused.
+                        result = MODEL.predict(frame, imgsz=640, conf=0.25, verbose=False)[0]
+                        piece_list = yolo_inference_to_piece_list(result, warped=True, orientation=game_state.orientation)
+
+                        # Payload item #1.
+                        game_image = cv2.imencode('.png', result.plot(font_size=20))[1]
+
+                        # The only case where `yolo_inference_to_piece_list` returns None
+                        # is when not enough corners are found, which means the frame is obstructed.
+                        if piece_list is None:
+                            # Payload item #2.
+                            prediction_status = PredictionStatus.Obstructed
+                        else:
+                            # Payload item #2.
+                            prediction_status, possible_moves = get_predicted_transition(
+                                known_board=game_state.board,
+                                piece_list=piece_list,
+                                match_exact=True)
+                            if prediction_status == PredictionStatus.ValidMove and possible_moves[0] != chess.Move.null():
+                                # This will not go out of index error since one move is always returned with 'ValidMove'.
                                 game_state.push_move(possible_moves[0])
                                 print('Valid move found:', possible_moves[0])
                                 print('New game state:', game_state.board.fen())
-                        else:
-                            # Might need to put automatic pausing here.
-                            pass
+                            elif prediction_status == PredictionStatus.InvalidMove:
+                                # This gives time to the arbiter to make manual edits.
+                                game_state.pause()
+                                print('Invalid move detected. Game paused.')
                     else:
-                        predict_status = PredictionStatus.Obstructed
-                    # plotted_img = cv2.imencode('.png', result.plot(font_size=20))[1]
-                    plotted_img = cv2.imencode('.png', frame)[1]
-                    statuses_to_controller.append(f'{status_string[predict_status]}|{game_state.serialise()}')
-                    images_to_client.append(base64.b64encode(plotted_img.tobytes()).decode('utf-8'))
-                    fens.append(game_state.board.fen())
-                # After inference is conducted, we finally distribute the messages to each connection.
-                # The clients need the images and FEN of each game.
+                        # Payload item #1.
+                        game_image = cv2.imencode('.png', frame)[1]
+                        # Payload item #2.
+                        prediction_status = PredictionStatus.ValidMove
+
+                    # Assemble payload.
+                    encoded_image = base64.b64encode(game_image.tobytes()).decode('utf-8')
+                    payload = create_transmission_payload(encoded_image, prediction_status, '', game_state)
+                    payload_list.append(payload)
+
+                # The same payload is distributed to all connections (client and controller).
                 for client in SERVER_STATE.connected_clients:
-                    payload = [f'{a}|{b}' for a, b in zip(images_to_client, fens)]
-                    await client.send(','.join(payload))
-                # The controller needs to know the status of each game.
+                    await client.send(','.join(payload_list))
                 if SERVER_STATE.connected_controller is not None:
-                    payload = [f'{a}|{b}' for a, b in zip(statuses_to_controller, fens)]
-                    await SERVER_STATE.connected_controller.send(','.join(payload))
+                    await SERVER_STATE.connected_controller.send(','.join(payload_list))
+
             elif (add_game_command := parse_add_game(parts)) is not None:
                 game_state, stream_uri = add_game_command
                 video = BufferlessVideo(stream_uri)
                 SERVER_STATE.add_new_game(game_state, video)
                 print(f'Added game: {stream_uri}')
+                print(f'Player 1: {game_state.p1}, Player 2: {game_state.p2}, Orientation: {game_state.orientation}')
+
             elif (remove_game_command := parse_remove_game(parts)) is not None:
                 remove_index = remove_game_command
                 SERVER_STATE.remove_game(remove_index)
                 print(f'Removed game at index: {remove_index}')
-            # Also need to make commands for push/undo move/rename players.
+
+            elif (push_move_command := parse_push_move(parts)) is not None:
+                game_index, move_uci = push_move_command
+                if 0 <= game_index < len(SERVER_STATE.games):
+                    move = chess.Move.from_uci(move_uci)
+                    if move in SERVER_STATE.games[game_index][0].board.legal_moves:
+                        SERVER_STATE.games[game_index][0].board.push(move)
+                        print(f'Pushed {move_uci} to game {game_index}')
+
+            elif (undo_move_command := parse_undo_move(parts)) is not None:
+                game_index = undo_move_command
+                if 0 <= game_index < len(SERVER_STATE.games):
+                    SERVER_STATE.games[game_index][0].board.pop()
+                    print(f'Latest move in game {game_index} is undone.')
+
+            elif (rename_command := parse_rename_players(parts)) is not None:
+                game_index, p1_name, p2_name = rename_command
+                if 0 <= game_index < len(SERVER_STATE.games):
+                    SERVER_STATE.games[game_index][0].p1 = p1_name
+                    SERVER_STATE.games[game_index][0].p2 = p2_name
+                    print(f'For game {game_index}, Player 1 is now "{p1_name}" and Player 2 is now "{p2_name}".')
+
+            elif (pause_command := parse_pause_game(parts)) is not None:
+                game_index = pause_command
+                if 0 <= game_index < len(SERVER_STATE.games):
+                    SERVER_STATE.games[game_index][0].pause()
+                    print(f'Game {game_index} is paused.')
+
+            elif (unpause_command := parse_unpause_game(parts)) is not None:
+                game_index = unpause_command
+                if 0 <= game_index < len(SERVER_STATE.games):
+                    SERVER_STATE.games[game_index][0].unpause()
+                    print(f'Game {game_index} is unpaused.')
+
+            elif (reorient_command := parse_reorient_game(parts)) is not None:
+                game_index, new_orientation = reorient_command
+                if 0 <= game_index < len(SERVER_STATE.games):
+                    SERVER_STATE.games[game_index][0].orientation = new_orientation
+                    print(f'Game {game_index} has been reoriented to {new_orientation}.')
 
 # This function handles the websocket connection lifetime
 # from when the connection is established until it is stopped.
@@ -172,11 +206,9 @@ async def main_handle(ws_connection):
     except websockets.exceptions.ConnectionClosed:
         print('Connection closed:', ws_connection)
     finally:
-        if starting_message == 'client':
-            SERVER_STATE.remove_client(ws_connection)
-        elif starting_message == 'controller':
-            SERVER_STATE.remove_controller(ws_connection)
-
+        # Tries both possibilities, preventing an UnboundLocalError.
+        SERVER_STATE.remove_client(ws_connection)
+        SERVER_STATE.remove_controller(ws_connection)
 
 # Main server cycle.
 async def main():
