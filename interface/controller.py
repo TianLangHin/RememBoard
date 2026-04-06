@@ -14,7 +14,7 @@ CORS(app)
 def root():
     return jsonify({'chess': True})
 
-@app.route('/client')
+@app.route('/controller')
 def controller():
     return send_from_directory(app.static_folder, 'index.html')
 
