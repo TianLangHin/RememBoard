@@ -44,7 +44,7 @@ function App() {
     const responder = (event: MessageEvent<any>) => {
       setPings(p => p + 1)
 
-      const gamePayloads = event.data.split(',')
+      const gamePayloads = event.data.split('%')
       const parsedPayloads = gamePayloads
         .map((payload: string) => parseServerPayload(payload))
         .filter((payload: ServerPayload | null) => payload !== null)

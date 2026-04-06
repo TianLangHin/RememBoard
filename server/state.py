@@ -1,6 +1,7 @@
 import chess
 
 from conversion import TopLeftSquare
+from inference import PredictionStatus
 
 class LiveGameState:
     def __init__(self, *, p1: str, p2: str, orientation: TopLeftSquare = TopLeftSquare.H8):
@@ -10,6 +11,8 @@ class LiveGameState:
         self.concluded = None
         self.board = chess.Board()
         self.orientation = orientation
+        self.prediction_status = PredictionStatus.ValidMove
+        self.diagnostics = ''
     def pause(self):
         self.paused = True
     def unpause(self):

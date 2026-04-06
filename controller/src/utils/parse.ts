@@ -13,17 +13,17 @@ export type ServerPayload = {
 
 export function parseServerPayload(payload: string): ServerPayload | null {
   var payloadRegex = new RegExp(
-    "status<(valid|invalid|ambiguous|obstructed)<([A-Za-z0-9 .,]*)>>" +
+    "status<(valid|invalid|ambiguous|obstructed)<([^<>]*)>>" +
     "game<" +
-    "p1<([A-Za-z0-9]*)>" +
-    "p2<([A-Za-z0-9]*)>" +
+    "p1<([^<>]*)>" +
+    "p2<([^<>]*)>" +
     "paused<(0|1)>" +
     "concluded<(1-0|1[/]2-1[/]2|0-1|[*])>" +
     "fen<([A-Za-z0-9/ -]+)>" +
     "moves<([A-Za-z0-9+#-|]*)>" +
     "orientation<(a1|a8|h1|h8)>" +
     ">" +
-    "img<([A-Za-z0-9+/=]*)>"
+    "img<([^<>]*)>"
   )
 
   const match = payload.match(payloadRegex)

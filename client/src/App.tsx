@@ -54,7 +54,7 @@ function App() {
     })
     // The main processing to conduct.
     socket.addEventListener('message', event => {
-      const gamePayloads = event.data.split(',')
+      const gamePayloads = event.data.split('%')
       const parsedPayloads = gamePayloads
         .map((payload: string) => parseServerPayload(payload))
         .filter((payload: ServerPayload | null) => payload !== null)
@@ -127,16 +127,16 @@ function App() {
         <Grid size={12}>
           <div style={{display: 'flex'}}>
             {/* The first column shows the image transmitted from the server. */}
-            <div style={{flex: 1, aspectRatio: 1}}>
+            <Box sx={{height: '60vh', aspectRatio: 1}}>
               <Chessboard options={chessboardSettings} />
-            </div>
-            <div ref={scrollRef} style={{flex: 1, overflow: 'scroll', height: '100%'}}>
+            </Box>
+            <Box ref={scrollRef} sx={{width: '50%', height: '60vh', overflow: 'scroll'}}>
             {
               getMoveList(selectedGame?.moves ?? []).map(({moveNum, white, black}) => (
                 <Typography key={moveNum}>{`${moveNum}. ${white} ${black}`}</Typography>
               ))
             }
-            </div>
+            </Box>
           </div>
         </Grid>
         <Grid size={12}>

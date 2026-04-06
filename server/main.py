@@ -8,7 +8,7 @@ import sqlite3
 import websockets
 
 from conversion import TopLeftSquare, yolo_inference_to_piece_list
-from inference import PredictionStatus, get_predicted_transition
+from inference import PredictionStatus, board_to_piece_list, get_predicted_transition
 from parse import parse_add_game, parse_remove_game, \
     parse_push_move, parse_undo_move, parse_rename_players, \
     parse_pause_game, parse_unpause_game, parse_reorient_game
@@ -92,6 +92,8 @@ async def handle_message(message: str, ws_connection):
                         # Payload item #1.
                         game_image = cv2.imencode('.png', result.plot(font_size=20))[1]
 
+                        diagnostics = ''
+                        prediction_status = PredictionStatus.ValidMove
                         # The only case where `yolo_inference_to_piece_list` returns None
                         # is when not enough corners are found, which means the frame is obstructed.
                         if piece_list is None:
@@ -109,25 +111,42 @@ async def handle_message(message: str, ws_connection):
                                 print('Valid move found:', possible_moves[0])
                                 print('New game state:', game_state.board.fen())
                             elif prediction_status == PredictionStatus.InvalidMove:
+                                true_piece_list = board_to_piece_list(game_state.board)
+                                extra_pieces = [
+                                    pred if pred is not None and truth is None else None
+                                    for truth, pred in zip(true_piece_list, piece_list)
+                                ]
+                                extra_pieces_with_locations = ', '.join([
+                                    f'{chess.COLOR_NAMES[piece.color]} {chess.PIECE_NAMES[piece.piece_type]} at {square_name}'
+                                    for piece, square_name in zip(extra_pieces, chess.SQUARE_NAMES)
+                                    if piece is not None
+                                ])
+                                diagnostics = f'Unexpected pieces: {extra_pieces_with_locations}.'
                                 # This gives time to the arbiter to make manual edits.
                                 game_state.pause()
                                 print('Invalid move detected. Game paused.')
+                                print('Diagnostics:', diagnostics)
+                            elif prediction_status == PredictionStatus.AmbiguousMove:
+                                possible_move_strings = ', '.join([move.uci() for move in possible_moves])
+                                diagnostics = f'Possible moves are: {possible_move_strings}.'
+                                game_state.pause()
+                                print('Ambiguous moves detected. Game paused.')
+                                print('Diagnostics:', diagnostics)
+                        game_state.prediction_status = prediction_status
+                        game_state.diagnostics = diagnostics
                     else:
-                        # Payload item #1.
                         game_image = cv2.imencode('.png', frame)[1]
-                        # Payload item #2.
-                        prediction_status = PredictionStatus.ValidMove
 
                     # Assemble payload.
                     encoded_image = base64.b64encode(game_image.tobytes()).decode('utf-8')
-                    payload = create_transmission_payload(encoded_image, prediction_status, '', game_state)
+                    payload = create_transmission_payload(encoded_image, game_state.prediction_status, game_state.diagnostics, game_state)
                     payload_list.append(payload)
 
                 # The same payload is distributed to all connections (client and controller).
                 for client in SERVER_STATE.connected_clients:
-                    await client.send(','.join(payload_list))
+                    await client.send('%'.join(payload_list))
                 if SERVER_STATE.connected_controller is not None:
-                    await SERVER_STATE.connected_controller.send(','.join(payload_list))
+                    await SERVER_STATE.connected_controller.send('%'.join(payload_list))
 
             elif (add_game_command := parse_add_game(parts)) is not None:
                 game_state, stream_uri = add_game_command
