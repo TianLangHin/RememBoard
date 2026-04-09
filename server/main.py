@@ -3,6 +3,7 @@ import asyncio
 import base64
 import chess
 import cv2
+import io
 import numpy as np
 import sqlite3
 import websockets
@@ -89,8 +90,11 @@ async def handle_message(message: str, ws_connection):
                         result = MODEL.predict(frame, imgsz=640, conf=0.25, verbose=False)[0]
                         piece_list = yolo_inference_to_piece_list(result, warped=True, orientation=game_state.orientation)
 
+                        buffer = io.BytesIO()
                         # Payload item #1.
-                        game_image = cv2.imencode('.png', result.plot(font_size=20))[1]
+                        result.plot(font_size=16, pil=True).save(buffer, format='PNG')
+                        game_image = buffer.getvalue()
+                        # game_image = cv2.imencode('.png', result.plot(font_size=20, pil=True))[1]
 
                         diagnostics = ''
                         prediction_status = PredictionStatus.ValidMove
@@ -122,8 +126,6 @@ async def handle_message(message: str, ws_connection):
                                     if piece is not None
                                 ])
                                 diagnostics = f'Unexpected pieces: {extra_pieces_with_locations}.'
-                                # This gives time to the arbiter to make manual edits.
-                                game_state.pause()
                                 print('Invalid move detected. Game paused.')
                                 print('Diagnostics:', diagnostics)
                             elif prediction_status == PredictionStatus.AmbiguousMove:
@@ -135,10 +137,10 @@ async def handle_message(message: str, ws_connection):
                         game_state.prediction_status = prediction_status
                         game_state.diagnostics = diagnostics
                     else:
-                        game_image = cv2.imencode('.png', frame)[1]
+                        game_image = cv2.imencode('.png', frame)[1].tobytes()
 
                     # Assemble payload.
-                    encoded_image = base64.b64encode(game_image.tobytes()).decode('utf-8')
+                    encoded_image = base64.b64encode(game_image).decode('utf-8')
                     payload = create_transmission_payload(encoded_image, game_state.prediction_status, game_state.diagnostics, game_state)
                     payload_list.append(payload)
 
