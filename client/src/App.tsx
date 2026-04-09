@@ -69,7 +69,7 @@ function App() {
       <Drawer
         open={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
-        PaperProps={{sx: {width: 1/5}}}>
+        PaperProps={{sx: {width: 1/4}}}>
         <Box role="presentation">
           <List>
           {
