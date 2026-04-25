@@ -20,12 +20,12 @@ def piece_list_to_board(pieces: List[Optional[chess.Piece]]) -> chess.Board:
     return board
 
 # Function used for checking a prediction against the ground truth chess position.
-def plot_image_and_classify(model: YOLO, game_num: int, move_num: int, image_dir: str, board: chess.Board) -> bool:
+def plot_image_and_classify(model: YOLO, game_num: int, move_num: int, image_dir: str, board: chess.Board, orientation: TopLeftSquare) -> bool:
     image_name = f'wc2021g{game_num:0>2}-{move_num:0>4}.png'
     image = cv2.imread(os.path.join(image_dir, image_name))
     # YOLO inference is conducted here.
     result = model.predict(image, imgsz=640, conf=0.25, verbose=False)[0]
-    predicted_piece_list = yolo_inference_to_piece_list(result, warped=True, orientation=TopLeftSquare.H8)
+    predicted_piece_list = yolo_inference_to_piece_list(result, warped=True, orientation=orientation)
     # The raw prediction by YOLO is saved.
     result.plot(font_size=20, save=True, filename=os.path.join(output_dir, f'plotted-{image_name}'), pil=True)
 
@@ -44,8 +44,8 @@ def plot_image_and_classify(model: YOLO, game_num: int, move_num: int, image_dir
     return True
 
 # Main function to conduct analysis of the model's performance on the WC 2021 dataset.
-def model_analysis_main(image_dir: str, output_dir: str):
-    model = YOLO('model/yolo11s-v0-0-1.pt')
+def model_analysis_main(image_dir: str, output_dir: str, model_name: str, orientation: TopLeftSquare):
+    model = YOLO(f'model/{model_name}.pt')
     # Default location of the PGN, and comes with the repository.
     pgn_dataset = os.path.join(os.getcwd(), '..', 'dataset', 'championships-1866-2021', 'WorldChamp2021.pgn')
     # Gather all the games.
@@ -63,13 +63,13 @@ def model_analysis_main(image_dir: str, output_dir: str):
         print(f'Starting Game {game_num}.')
         # Keeps track of the true board state.
         board = chess.Board()
-        misclassified = plot_image_and_classify(model, game_num, 1, image_dir, board)
+        misclassified = plot_image_and_classify(model, game_num, 1, image_dir, board, orientation)
         if misclassified:
             num_misclassifications += 1
         for move_num, move_data in enumerate(game_data.mainline_moves(), 2):
             # Ground truth board state is updated here.
             board.push(move_data)
-            misclassified = plot_image_and_classify(model, game_num, move_num, image_dir, board)
+            misclassified = plot_image_and_classify(model, game_num, move_num, image_dir, board, orientation)
             if misclassified:
                 num_misclassifications += 1
             num_positions += 1
@@ -82,8 +82,8 @@ def model_analysis_main(image_dir: str, output_dir: str):
 
 # Main function to conduct analysis of the model's performance on an unseen dataset,
 # with a customisable PGN location.
-def model_analysis_unseen(image_dir: str, output_dir: str, pgn_file: str):
-    model = YOLO('model/yolo11s-v0-0-1.pt')
+def model_analysis_unseen(image_dir: str, output_dir: str, pgn_file: str, model_name: str, orientation: TopLeftSquare):
+    model = YOLO(f'model/{model_name}.pt')
     # Read the PGN.
     with open(pgn_file, 'rt') as f:
         game_data = chess.pgn.read_game(f)
@@ -109,7 +109,7 @@ def model_analysis_unseen(image_dir: str, output_dir: str, pgn_file: str):
         # We read the image in lexicographical order.
         image = cv2.imread(os.path.join(image_dir, image_name))
         result = model.predict(image, imgsz=640, conf=0.25, verbose=False)[0]
-        predicted_piece_list = yolo_inference_to_piece_list(result, warped=True, orientation=TopLeftSquare.A1)
+        predicted_piece_list = yolo_inference_to_piece_list(result, warped=True, orientation=orientation)
         # The inference result is recorded into an image as well.
         result.plot(font_size=20, save=True, filename=os.path.join(output_dir, f'plotted-{image_name}'), pil=True)
         true_piece_list = board_to_piece_list(board)
@@ -147,11 +147,19 @@ if __name__ == '__main__':
     image_dir = sys.argv[1]
     output_dir = sys.argv[2]
     data_setup = sys.argv[3]
-    pgn_file = None if len(sys.argv) <= 4 else sys.argv[4] # Optional argument to read the PGN.
+    model = sys.argv[4]
+    orientation = sys.argv[5]
+    pgn_file = None if len(sys.argv) <= 6 else sys.argv[6] # Optional argument to read the PGN.
+    o_map = {
+        'a1': TopLeftSquare.A1,
+        'a8': TopLeftSquare.A8,
+        'h1': TopLeftSquare.H1,
+        'h8': TopLeftSquare.H8,
+    }
     if data_setup == 'main':
         # Analysis against the initial dataset of WorldChamp2021.
-        model_analysis_main(image_dir, output_dir)
+        model_analysis_main(image_dir, output_dir, model, o_map[orientation])
     elif data_setup == 'unseen':
         # Analysis against the unseen dataset, which in this case is a separately collected image set
         # using Game 24 of the 1987 World Championship.
-        model_analysis_unseen(image_dir, output_dir, pgn_file)
+        model_analysis_unseen(image_dir, output_dir, model, o_map[orientation], pgn_file)
