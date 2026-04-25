@@ -28,6 +28,7 @@ function App() {
   const [playerOne, setPlayerOne] = useState('PlayerOne')
   const [playerTwo, setPlayerTwo] = useState('PlayerTwo')
   const [orientation, setOrientation] = useState('h8')
+  const [boardType, setBoardType] = useState('wooden')
 
   const connection = useRef<WebSocket | null>(null)
   useEffect(() => {
@@ -66,7 +67,7 @@ function App() {
   }, [pinging])
 
   const addGame = () => {
-    connection.current?.send(`addgame ${playerOne} ${playerTwo} ${orientation} ${stream}`)
+    connection.current?.send(`addgame "${playerOne}" "${playerTwo}" ${orientation} ${stream} ${boardType}`)
   }
 
   const removeGame = () => {
@@ -90,7 +91,7 @@ function App() {
   }
 
   const renamePlayers = () => {
-    connection.current?.send(`renameplayers ${selectedGame} ${playerOne} ${playerTwo}`)
+    connection.current?.send(`renameplayers ${selectedGame} "${playerOne}" "${playerTwo}"`)
   }
 
   const reorientGame = () => {
@@ -125,7 +126,20 @@ function App() {
         <Grid size={12}>
           <Paper elevation={2}>
             <Grid container sx={{width: '100%', p: 2}}>
-              <Grid size={6}>
+              <Grid size={3}>
+                <FormControl>
+                  <InputLabel>Top-Left Corner</InputLabel>
+                  <Select
+                    value={boardType}
+                    defaultValue={'wooden'}
+                    label="Board Type"
+                    onChange={e => setBoardType(e.target.value)}>
+                    <MenuItem value={'wooden'}>Wooden Board</MenuItem>
+                    <MenuItem value={'handheld'}>Handheld Board</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={3}>
                 <TextField
                   variant="outlined"
                   label="Stream URI"
