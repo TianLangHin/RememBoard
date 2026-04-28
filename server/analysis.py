@@ -1,7 +1,7 @@
 from chess.pgn import Game
 from conversion import TopLeftSquare, yolo_inference_to_piece_list
-from typing import List, Optional
-from ultralytics import YOLO
+from typing import List, Optional, Union
+from ultralytics import RTDETR, YOLO
 import chess
 import cv2
 import os
@@ -20,7 +20,7 @@ def piece_list_to_board(pieces: List[Optional[chess.Piece]]) -> chess.Board:
     return board
 
 # Function used for checking a prediction against the ground truth chess position.
-def plot_image_and_classify(model: YOLO, game_num: int, move_num: int, image_dir: str, board: chess.Board, orientation: TopLeftSquare) -> bool:
+def plot_image_and_classify(model: Union[RTDETR, YOLO], game_num: int, move_num: int, image_dir: str, board: chess.Board, orientation: TopLeftSquare) -> bool:
     image_name = f'wc2021g{game_num:0>2}-{move_num:0>4}.png'
     image = cv2.imread(os.path.join(image_dir, image_name))
     # YOLO inference is conducted here.
@@ -45,7 +45,10 @@ def plot_image_and_classify(model: YOLO, game_num: int, move_num: int, image_dir
 
 # Main function to conduct analysis of the model's performance on the WC 2021 dataset.
 def model_analysis_main(image_dir: str, output_dir: str, model_name: str, orientation: TopLeftSquare):
-    model = YOLO(f'model/{model_name}.pt')
+    if model_name.startswith('yolo11s'):
+        model = YOLO(f'model/{model_name}.pt')
+    else:
+        model = RTDETR(f'model/{model_name}.pt')
     # Default location of the PGN, and comes with the repository.
     pgn_dataset = os.path.join(os.getcwd(), '..', 'dataset', 'championships-1866-2021', 'WorldChamp2021.pgn')
     # Gather all the games.
@@ -83,7 +86,10 @@ def model_analysis_main(image_dir: str, output_dir: str, model_name: str, orient
 # Main function to conduct analysis of the model's performance on an unseen dataset,
 # with a customisable PGN location.
 def model_analysis_unseen(image_dir: str, output_dir: str, pgn_file: str, model_name: str, orientation: TopLeftSquare):
-    model = YOLO(f'model/{model_name}.pt')
+    if model_name.startswith('yolo11s'):
+        model = YOLO(f'model/{model_name}.pt')
+    else:
+        model = RTDETR(f'model/{model_name}.pt')
     # Read the PGN.
     with open(pgn_file, 'rt') as f:
         game_data = chess.pgn.read_game(f)
@@ -162,4 +168,4 @@ if __name__ == '__main__':
     elif data_setup == 'unseen':
         # Analysis against the unseen dataset, which in this case is a separately collected image set
         # using Game 24 of the 1987 World Championship.
-        model_analysis_unseen(image_dir, output_dir, model, o_map[orientation], pgn_file)
+        model_analysis_unseen(image_dir, output_dir, pgn_file, model, o_map[orientation])

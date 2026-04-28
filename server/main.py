@@ -14,13 +14,16 @@ from parse import parse_add_game, parse_remove_game, \
     parse_push_move, parse_undo_move, parse_rename_players, \
     parse_pause_game, parse_unpause_game, parse_reorient_game
 from state import LiveGameState
+from storage import GameStorage, StoredGame
 from video import BufferlessVideo
 
-from ultralytics import YOLO
+from ultralytics import RTDETR, YOLO
 
 MODELS = {
-    'wooden': YOLO('model/yolo11s-v0-0-1.pt'),
-    'handheld': YOLO('model/yolo11s-v0-0-2.pt'),
+    'wooden-yolo': YOLO('model/yolo11s-wooden.pt'),
+    'handheld-yolo': YOLO('model/yolo11s-handheld.pt'),
+    'wooden-rtdetr': RTDETR('model/rtdetr-wooden.pt'),
+    'handheld-rtdetr': RTDETR('model/rtdetr-handheld.pt'),
 }
 
 class ServerState:
@@ -50,6 +53,7 @@ class ServerState:
 
 PORT_NUMBER = 19941
 SERVER_STATE = ServerState()
+GAME_STORAGE = GameStorage()
 lock = asyncio.Lock()
 
 def read_and_resize_frame(cap: BufferlessVideo) -> Optional[np.ndarray]:
@@ -76,6 +80,7 @@ def create_transmission_payload(
 async def handle_message(message: str, ws_connection):
     async with lock:
         global SERVER_STATE
+        global GAME_STORAGE
         if ws_connection == SERVER_STATE.connected_controller:
             if message == 'inference':
                 # This will contain a list of strings referring to each game in SERVER_STATE.
@@ -152,6 +157,8 @@ async def handle_message(message: str, ws_connection):
                     await client.send('%'.join(payload_list))
                 if SERVER_STATE.connected_controller is not None:
                     await SERVER_STATE.connected_controller.send('%'.join(payload_list))
+
+            # TODO: Implement receivers for retrieving and saving game data into GAME_STORAGE.
 
             elif (add_game_command := parse_add_game(message)) is not None:
                 game_state, stream_uri, board_type = add_game_command

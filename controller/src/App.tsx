@@ -28,7 +28,10 @@ function App() {
   const [playerOne, setPlayerOne] = useState('PlayerOne')
   const [playerTwo, setPlayerTwo] = useState('PlayerTwo')
   const [orientation, setOrientation] = useState('h8')
-  const [boardType, setBoardType] = useState('wooden')
+  const [boardType, setBoardType] = useState('wooden-yolo')
+
+  // Toggles whether the persistent game retrieval functionality is being used.
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
   const connection = useRef<WebSocket | null>(null)
   useEffect(() => {
@@ -98,8 +101,21 @@ function App() {
     connection.current?.send(`reorient ${selectedGame} ${orientation}`)
   }
 
+  const saveGame = () => {
+    connection.current?.send(`save ${selectedGame}`)
+  }
+
   return (
     <ThemeProvider theme={theme}>
+      <Drawer
+        open={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        PaperProps={{sx: {width: 3/4}}}>
+        <Box role="presentation">
+          <List>
+          </List>
+        </Box>
+      </Drawer>
       <Grid container spacing={2} sx={{width: '100%'}}>
         {/* Row 1. */}
         <Grid size={12}>
@@ -131,11 +147,11 @@ function App() {
                   <InputLabel>Top-Left Corner</InputLabel>
                   <Select
                     value={boardType}
-                    defaultValue={'wooden'}
+                    defaultValue={'wooden-yolo'}
                     label="Board Type"
                     onChange={e => setBoardType(e.target.value)}>
-                    <MenuItem value={'wooden'}>Wooden Board</MenuItem>
-                    <MenuItem value={'handheld'}>Handheld Board</MenuItem>
+                    <MenuItem value={'wooden-yolo'}>Wooden Board</MenuItem>
+                    <MenuItem value={'handheld-yolo'}>Handheld Board</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -225,14 +241,13 @@ function App() {
               </Grid>
               {/* Row 4e. */}
               <Grid size={3}>
-              </Grid>
-              <Grid size={3}>
                 <Button variant="contained" onClick={pauseGame}>Pause Game</Button>
               </Grid>
               <Grid size={3}>
                 <Button variant="contained" onClick={unpauseGame}>Unpause Game</Button>
               </Grid>
-              <Grid size={3}>
+              <Grid size={6}>
+                <Button variant="contained" onClick={saveGame}>Save Game</Button>
               </Grid>
             </Grid>
           </Paper>
