@@ -44,3 +44,29 @@ export function parseServerPayload(payload: string): ServerPayload | null {
     imageContent: match[10],
   }
 }
+
+export type StoredGame = {
+  id: number,
+  date: string,
+  white: string,
+  black: string,
+  result: string,
+  moves: string,
+}
+
+export function parseStoredGame(payload: string): StoredGame | null {
+  const regex = /id<(\d+)>date<(.*)>white<(.*)>black<(.*)>result<(.*)>moves<(.*)>/
+  const match = payload.match(regex)
+  if (match === null) {
+    return null
+  }
+
+  return {
+    id: Number(match[1]),
+    date: match[2],
+    white: match[3],
+    black: match[4],
+    result: match[5],
+    moves: match[6],
+  }
+}
