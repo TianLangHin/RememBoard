@@ -12,7 +12,8 @@ from conversion import TopLeftSquare, yolo_inference_to_piece_list
 from inference import PredictionStatus, board_to_piece_list, get_predicted_transition
 from parse import parse_add_game, parse_remove_game, \
     parse_push_move, parse_undo_move, parse_rename_players, \
-    parse_pause_game, parse_unpause_game, parse_reorient_game
+    parse_pause_game, parse_unpause_game, parse_reorient_game, \
+    parse_conclude_game, parse_insert_game, parse_find_game, parse_search_games, parse_delete_game
 from state import LiveGameState
 from storage import GameStorage, StoredGame
 from video import BufferlessVideo
@@ -158,14 +159,50 @@ async def handle_message(message: str, ws_connection):
                 if SERVER_STATE.connected_controller is not None:
                     await SERVER_STATE.connected_controller.send('%'.join(payload_list))
 
-            # TODO: Implement receivers for retrieving and saving game data into GAME_STORAGE.
+            elif (conclude_game_command := parse_conclude_game(message)) is not None:
+                game_index, conclusion = conclude_game_command
+                SERVER_STATE.games[game_index][0].override_result(conclusion)
+                print(f'Overwrote result of game at index {game_index} with conclusion: {conclusion}')
+
+            elif (insert_game_command := parse_insert_game(message)) is not None:
+                game_index = insert_game_command
+                game = SERVER_STATE.games[game_index][0]
+                GAME_STORAGE.insert_game(white=game.p1, black=game.p2, result=game.concluded, board=game.board)
+                print(f'Inserting game {game_index} into storage.')
+
+            elif (find_game_command := parse_find_game(message)) is not None:
+                game_id = find_game_command
+                found_game = GAME_STORAGE.find_game(game_id)
+                if found_game is not None:
+                    id, date, white, black, result, moves = found_game
+                    moves = ' '.join(moves)
+                    msg = f'id<{id}>date<{date}>white<{white}>black<{black}>result<{result}>moves<{moves}>'
+                    await SERVER_STATE.connected_controller.send(msg)
+                print(f'Finding game of ID {game_id}.')
+
+            elif (search_game_command := parse_search_games(message)) is not None:
+                date, white, black, result = search_game_command
+                print(f'Searching games where date={date}, white={white}, black={black}, result={result}.')
+                entries = GAME_STORAGE.search_games(date=date, white=white, black=black, result=result)
+                game_data = []
+                for id, stored_game in entries:
+                    date, white, black, result, moves = stored_game
+                    moves = ' '.join(moves)
+                    msg = f'id<{id}>date<{date}>white<{white}>black<{black}>result<{result}>moves<{moves}>'
+                    game_data.append(msg)
+                await SERVER_STATE.connected_controller.send('%'.join(game_data))
+
+            elif (delete_game_command := parse_delete_game(message)) is not None:
+                game_id = delete_game_command
+                GAME_STORAGE.delete_game(game_id)
+                print(f'Deleting game of ID {game_id}.')
 
             elif (add_game_command := parse_add_game(message)) is not None:
                 game_state, stream_uri, board_type = add_game_command
                 video = BufferlessVideo(stream_uri)
                 SERVER_STATE.add_new_game(game_state, video, board_type)
                 print(f'Added game: {stream_uri}')
-                print(f'Player 1: {game_state.p1}, Player 2: {game_state.p2}, Orientation: {game_state.orientation}')
+                print(f'Player 1: {game_state.p1}, Player 2: {game_state.p2}, Orientation: {game_state.orientation}, Model: {board_type}')
 
             elif (remove_game_command := parse_remove_game(message)) is not None:
                 remove_index = remove_game_command
@@ -240,6 +277,7 @@ async def main_handle(ws_connection):
         # Tries both possibilities, preventing an UnboundLocalError.
         SERVER_STATE.remove_client(ws_connection)
         SERVER_STATE.remove_controller(ws_connection)
+        GAME_STORAGE.finalise()
 
 # Main server cycle.
 async def main():
