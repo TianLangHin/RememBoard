@@ -123,6 +123,12 @@ function App() {
             Open Drawer
           </Button>
         </Grid>
+        {/* Row 2.5. */}
+        <Grid size={12}>
+          <Paper sx={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+            <h3>Result: {selectedGame?.concluded}</h3>
+          </Paper>
+        </Grid>
         {/* Row 3. */}
         <Grid size={12}>
           <div style={{display: 'flex'}}>
