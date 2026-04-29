@@ -7,7 +7,7 @@ from state import LiveGameState
 
 # Example: 'addgame "P1" "P2" h8 http://192.168.1.47:8080/video wooden'
 def parse_add_game(cmd: str) -> Optional[Tuple[LiveGameState, str]]:
-    matches = re.match(r'addgame "(.*)" "(.*)" (a1|a8|h1|h8) (.+) (wooden|handheld)', cmd)
+    matches = re.match(r'addgame "(.*)" "(.*)" (a1|a8|h1|h8) (.+) (wooden-yolo|handheld-yolo|wooden-rtdetr|handheld-rtdetr)', cmd)
     if matches is None:
         return None
     enum_lookup = {
@@ -70,7 +70,7 @@ def parse_unpause_game(cmd: str) -> Optional[int]:
     return int(index)
 
 # Example: 'reorient 0 a1'
-def parse_reorient_game(cmd: List[str]) -> Optional[Tuple[int, TopLeftSquare]]:
+def parse_reorient_game(cmd: str) -> Optional[Tuple[int, TopLeftSquare]]:
     matches = re.match(r'reorient (\d+) (a1|a8|h1|h8)', cmd)
     if matches is None:
         return None
@@ -85,3 +85,43 @@ def parse_reorient_game(cmd: List[str]) -> Optional[Tuple[int, TopLeftSquare]]:
     if orientation is None:
         return None
     return int(index), orientation
+
+# Example: 'conclude 0 1/2-1/2'
+def parse_conclude_game(cmd: str) -> Optional[Tuple[int, str]]:
+    matches = re.match(r'conclude (\d+) ([*]|1-0|0-1|1/2-1/2)', cmd)
+    if matches is None:
+        return None
+    index, conclusion = matches.groups()
+    return int(index), conclusion
+
+# Example: 'storage insert 0'
+def parse_insert_game(cmd: str) -> Optional[int]:
+    matches = re.match(r'storage insert (\d+)', cmd)
+    if matches is None:
+        return None
+    index, = matches.groups()
+    return int(index)
+
+# Example: 'storage find 0'
+def parse_find_game(cmd: str) -> Optional[int]:
+    matches = re.match(r'storage find (\d+)', cmd)
+    if matches is None:
+        return None
+    index, = matches.groups()
+    return int(index)
+
+# Example: 'storage search "2026-01-31" "White" "Black" "1-0"'
+def parse_search_games(cmd: str) -> Optional[Tuple[str, str, str, str]]:
+    matches = re.match(r'storage search "(.*)" "(.*)" "(.*)" "(.*)"', cmd)
+    if matches is None:
+        return None
+    date, white, black, result = matches.groups()
+    return date, white, black, result
+
+# Example: 'storage delete 0'
+def parse_delete_game(cmd: str) -> Optional[int]:
+    matches = re.match(r'storage delete (\d+)', cmd)
+    if matches is None:
+        return None
+    index, = matches.groups()
+    return int(index)
