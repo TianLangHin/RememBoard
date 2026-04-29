@@ -21,14 +21,22 @@ class GameStorage:
         ''')
     def find_game(self, game_id: int):
         for row in self.cursor.execute('SELECT * FROM Games WHERE GameID = ?;', (game_id,)):
-            return row
+            id, *game = row
+            *game_data, moves = game
+            san_moves = []
+            board = chess.Board()
+            for move in moves.split():
+                san_moves.append(board.san(chess.Move.from_uci(move)))
+                board.push_uci(move)
+            return id, *game_data, san_moves
         return None
     def search_games(self, *, date: str = '%', white: str = '%', black: str = '%', result: str = '%') -> list[int, StoredGame]:
-        result = self.cursor.execute(
+        wildcard = lambda x: '%' if x == '' else x
+        query_result = self.cursor.execute(
             'SELECT * FROM Games WHERE Date LIKE ? AND White LIKE ? AND Black LIKE ? AND Result LIKE ?;',
-            (date, white, black, result))
+            (wildcard(date), wildcard(white), wildcard(black), wildcard(result)))
         entries = []
-        for row in result:
+        for row in query_result:
             id, *game = row
             *game_data, moves = game
             san_moves = []
@@ -41,10 +49,9 @@ class GameStorage:
     def delete_game(self, game_id: int):
         self.cursor.execute('DELETE FROM Games WHERE GameID = ?;', (game_id,))
         self.connection.commit()
-    def insert_game(self, *, white: str, black: str, board: chess.Board):
+    def insert_game(self, *, white: str, black: str, result: str, board: chess.Board):
         date = datetime.date.today().isoformat()
         moves = ' '.join(move.uci() for move in board.move_stack)
-        result = board.result()
         self.cursor.execute(
             'INSERT INTO Games (Date, White, Black, Result, Moves) VALUES (?, ?, ?, ?, ?);',
             (date, white, black, result, moves))
