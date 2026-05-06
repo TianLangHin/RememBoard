@@ -21,7 +21,7 @@ function App() {
     },
   })
 
-  const [pings, setPings] = useState(0)
+  const [pings, setPings] = useState<number[]>([0, 0])
   const [pinging, setPinging] = useState(false)
 
   const [gameInfo, setGameInfo] = useState<ServerPayload[]>([])
@@ -66,12 +66,13 @@ function App() {
   // Receives data.
   useEffect(() => {
     const responder = (event: MessageEvent<any>) => {
-      setPings(p => p + 1)
+      setPings(p => [p[1], Date.now()])
 
       const gamePayloads = event.data.split('%')
       const parsedPayloads = gamePayloads
         .map((payload: string) => parseServerPayload(payload))
         .filter((payload: ServerPayload | null) => payload !== null)
+
       if (parsedPayloads.length > 0) {
         setGameInfo(parsedPayloads)
         if (pinging) {
@@ -79,8 +80,8 @@ function App() {
         }
       } else {
         const storagePayloads = gamePayloads
-        .map((payload: string) => parseStoredGame(payload))
-        .filter((game: StoredGame | null) => game !== null)
+          .map((payload: string) => parseStoredGame(payload))
+          .filter((game: StoredGame | null) => game !== null)
         setQueryResults(storagePayloads)
       }
     }
@@ -256,10 +257,13 @@ function App() {
         <Grid size={12}>
           <Paper elevation={2}>
             <Grid container sx={{width: '100%', p: 2}}>
-              <Grid size={6}>
-                <p>Server Pings: {pings}</p>
+              <Grid size={4}>
+                <p>FPS: {pings[0] === pings[1] ? 0 : (1000 / (pings[1] - pings[0])).toFixed(2)}</p>
               </Grid>
-              <Grid size={6}>
+              <Grid size={4}>
+                <p>Currently Pinging: {pinging ? 'True' : 'False'}</p>
+              </Grid>
+              <Grid size={4}>
                 <Button variant="contained" onClick={() => setPinging(p => !p)} sx={{height: '100%'}}>
                   Toggle Server Pinging
                 </Button>
